@@ -24,7 +24,7 @@ export async function fetchRSSFeed(feedUrl: string): Promise<RSSFeed> {
           title: item.title || "",
           link: item.link || "",
           description: item.description || "",
-          pubDate: item.pubDate || "",
+          pubDate: item.pubDate || new Date().toISOString(),
           category: Array.isArray(item.category)
             ? item.category
             : item.category
@@ -44,6 +44,7 @@ export async function fetchRSSFeed(feedUrl: string): Promise<RSSFeed> {
       items,
       feedUrl,
       title: channel.title || "",
+      link: channel.link || "",
       description: channel.description || "",
       language: channel.language || "",
       lastBuildDate: channel.lastBuildDate || "",

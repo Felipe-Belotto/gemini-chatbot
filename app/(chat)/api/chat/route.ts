@@ -4,13 +4,13 @@ import { convertToCoreMessages, Message, streamText } from "ai";
 import { z } from "zod";
 
 import { geminiProModel } from "@/ai";
-import { auth } from "@/app/(auth)/auth";
-import { deleteChatById, getChatById, saveChat } from "@/db/queries";
-import { generateUUID } from "@/lib/utils";
 import {
   searchFernandoBelottoSite,
   preloadCaches,
 } from "@/ai/fernando-belotto";
+import { auth } from "@/app/(auth)/auth";
+import { deleteChatById, getChatById, saveChat } from "@/db/queries";
+import { generateUUID } from "@/lib/utils";
 
 // Pré-carrega os caches quando o servidor inicia
 preloadCaches().catch((error) => {

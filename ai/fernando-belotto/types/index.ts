@@ -54,18 +54,18 @@ export interface RSSItem {
   title: string;
   link: string;
   description: string;
-  pubDate?: string;
+  pubDate: string;
   category?: string[];
   author?: string;
   guid?: string;
-  [key: string]: any;
 }
 
 export interface RSSFeed {
   items: RSSItem[];
   feedUrl: string;
-  title?: string;
-  description?: string;
+  title: string;
+  link: string;
+  description: string;
   language?: string;
   lastBuildDate?: string;
 }

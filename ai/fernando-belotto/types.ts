@@ -19,18 +19,4 @@ export interface SearchResult {
   message?: string;
 }
 
-export interface RSSItem {
-  title: string;
-  link: string;
-  description: string;
-  pubDate: string;
-  guid?: string;
-  category?: string[];
-}
-
-export interface RSSFeed {
-  title: string;
-  link: string;
-  description: string;
-  items: RSSItem[];
-}
+export type { RSSFeed, RSSItem } from "./types/index";
