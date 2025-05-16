@@ -19,7 +19,13 @@ import useWindowSize from "./use-window-size";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 
-const suggestedActions = [];
+interface SuggestedAction {
+  title: string;
+  label: string;
+  action: string;
+}
+
+const suggestedActions: SuggestedAction[] = [];
 
 export function MultimodalInput({
   input,
