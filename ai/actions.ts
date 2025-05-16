@@ -66,7 +66,7 @@ export async function generateSampleFlightSearchResults({
         timestamp: z.string().describe("ISO 8601 arrival date and time"),
       }),
       airlines: z.array(
-        z.string().describe("Airline names, e.g., American Airlines, Emirates"),
+        z.string().describe("Airline names, e.g., American Airlines, Emirates")
       ),
       priceInUSD: z.number().describe("Flight price in US dollars"),
       numberOfStops: z.number().describe("Number of stops during the flight"),
@@ -94,7 +94,7 @@ export async function generateSampleSeatSelection({
         isAvailable: z
           .boolean()
           .describe("Whether the seat is available for booking"),
-      }),
+      })
     ),
   });
 
@@ -122,7 +122,11 @@ export async function generateReservationPrice(props: {
 }) {
   const { object: reservation } = await generateObject({
     model: geminiFlashModel,
-    prompt: `Generate price for the following reservation \n\n ${JSON.stringify(props, null, 2)}`,
+    prompt: `Generate price for the following reservation \n\n ${JSON.stringify(
+      props,
+      null,
+      2
+    )}`,
     schema: z.object({
       totalPriceInUSD: z
         .number()

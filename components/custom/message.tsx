@@ -16,6 +16,41 @@ import { ListFlights } from "../flights/list-flights";
 import { SelectSeats } from "../flights/select-seats";
 import { VerifyPayment } from "../flights/verify-payment";
 
+const SearchResults = ({ results }: { results: any }) => {
+  if (!results || !results.results || results.results.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        Nenhum resultado encontrado.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {results.results.map((result: any, index: number) => (
+        <div key={index} className="border rounded-lg p-4 space-y-2">
+          <h3 className="font-medium">
+            <a
+              href={result.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              {result.title}
+            </a>
+          </h3>
+          <p className="text-sm text-muted-foreground">{result.content}</p>
+          {result.date && (
+            <p className="text-xs text-muted-foreground">
+              Publicado em: {new Date(result.date).toLocaleDateString("pt-BR")}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const Message = ({
   chatId,
   role,
@@ -74,9 +109,9 @@ export const Message = ({
                       <DisplayBoardingPass boardingPass={result} />
                     ) : toolName === "verifyPayment" ? (
                       <VerifyPayment result={result} />
-                    ) : (
-                      <div>{JSON.stringify(result, null, 2)}</div>
-                    )}
+                    ) : toolName === "searchSite" ? (
+                      <SearchResults results={result} />
+                    ) : null}
                   </div>
                 );
               } else {

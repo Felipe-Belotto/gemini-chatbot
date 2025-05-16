@@ -1,22 +1,21 @@
+// app/api/chat/route.ts
+
 import { convertToCoreMessages, Message, streamText } from "ai";
 import { z } from "zod";
 
 import { geminiProModel } from "@/ai";
-import {
-  generateReservationPrice,
-  generateSampleFlightSearchResults,
-  generateSampleFlightStatus,
-  generateSampleSeatSelection,
-} from "@/ai/actions";
 import { auth } from "@/app/(auth)/auth";
-import {
-  createReservation,
-  deleteChatById,
-  getChatById,
-  getReservationById,
-  saveChat,
-} from "@/db/queries";
+import { deleteChatById, getChatById, saveChat } from "@/db/queries";
 import { generateUUID } from "@/lib/utils";
+import {
+  searchFernandoBelottoSite,
+  preloadCaches,
+} from "@/ai/fernando-belotto";
+
+// Pré-carrega os caches quando o servidor inicia
+preloadCaches().catch((error) => {
+  console.error("❌ Erro ao pré-carregar caches:", error);
+});
 
 export async function POST(request: Request) {
   const { id, messages }: { id: string; messages: Array<Message> } =
@@ -29,197 +28,75 @@ export async function POST(request: Request) {
   }
 
   const coreMessages = convertToCoreMessages(messages).filter(
-    (message) => message.content.length > 0,
+    (message) => message.content.length > 0
   );
 
   const result = await streamText({
     model: geminiProModel,
     system: `\n
-        - you help users book flights!
-        - keep your responses limited to a sentence.
-        - DO NOT output lists.
-        - after every tool call, pretend you're showing the result to the user and keep your response limited to a phrase.
-        - today's date is ${new Date().toLocaleDateString()}.
-        - ask follow up questions to nudge user into the optimal flow
-        - ask for any details you don't know, like name of passenger, etc.'
-        - C and D are aisle seats, A and F are window seats, B and E are middle seats
-        - assume the most popular airports for the origin and destination
-        - here's the optimal flow
-          - search for flights
-          - choose flight
-          - select seats
-          - create reservation (ask user whether to proceed with payment or change reservation)
-          - authorize payment (requires user consent, wait for user to finish payment and let you know when done)
-          - display boarding pass (DO NOT display boarding pass without verifying payment)
-        '
-      `,
+    - Você é um assistente de IA especializado no site Fernando Belotto (fernandobelotto.com).
+    - IMPORTANTE: Você NÃO tem acesso direto à internet. Você DEVE utilizar APENAS as ferramentas fornecidas (searchSite) para obter informações.
+    - Ao receber uma pergunta, SEMPRE use primeiro a ferramenta searchSite para buscar informações relevantes.
+    - SEMPRE responda em português do Brasil, mesmo que o usuário escreva em outro idioma.
+    - Sempre cite suas fontes com o link completo para o artigo ou página específica.
+    - Para perguntas sobre tecnologias específicas como React, Next.js, JavaScript, etc., busque explicitamente por esses termos usando a ferramenta searchSite.
+    - Se a primeira busca não retornar resultados satisfatórios, tente reformular a consulta usando sinônimos ou termos relacionados.
+    
+    - SEJA EXTREMAMENTE CONCISO E DIRETO EM SUAS RESPOSTAS. 
+    - EVITE REPETIÇÕES E REDUNDÂNCIAS.
+    - NÃO REPITA AS MESMAS INFORMAÇÕES DUAS VEZES.
+    - PREFIRA PARÁGRAFOS CURTOS E OBJETIVOS.
+    - PREFIRA LISTAS E MARCADORES QUANDO APROPRIADO PARA AUMENTAR A LEGIBILIDADE.
+    - RESPONDA APENAS O QUE FOI PERGUNTADO, SEM ADICIONAR INFORMAÇÕES DESNECESSÁRIAS.
+    
+    - Quando fornecer conteúdo do site, cite no formato: "Fonte: [título do artigo]([URL])".
+    - Seja específico ao explicar onde a informação foi encontrada no site (ex: "Encontrei esta informação no Blog", ou "De acordo com o artigo na seção Tools").
+    - Se o usuário perguntar sobre um tópico que não está no site Fernando Belotto, explique que você é especializado apenas no conteúdo deste site.
+    - Mantenha as respostas concisas, mas completas, focando no conteúdo do site Fernando Belotto.
+    - A data de hoje é ${new Date().toLocaleDateString()}.
+    - Para exemplos de código encontrados no site, formate-os adequadamente com destaque de sintaxe.
+    - Sempre sugira outros artigos relacionados do site que possam interessar ao usuário.
+    - Se não encontrar informações sobre a consulta no site, seja honesto e sugira outros tópicos que estão disponíveis no site.
+  `,
     messages: coreMessages,
     tools: {
-      getWeather: {
-        description: "Get the current weather at a location",
+      searchSite: {
+        description: "Search for information in the Fernando Belotto website",
         parameters: z.object({
-          latitude: z.number().describe("Latitude coordinate"),
-          longitude: z.number().describe("Longitude coordinate"),
+          section: z
+            .string()
+            .describe(
+              "The section of the site to search (blog, tools, news, or leave empty for general search)"
+            ),
+          query: z.string().describe("The specific information being sought"),
         }),
-        execute: async ({ latitude, longitude }) => {
-          const response = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m&hourly=temperature_2m&daily=sunrise,sunset&timezone=auto`,
-          );
-
-          const weatherData = await response.json();
-          return weatherData;
-        },
-      },
-      displayFlightStatus: {
-        description: "Display the status of a flight",
-        parameters: z.object({
-          flightNumber: z.string().describe("Flight number"),
-          date: z.string().describe("Date of the flight"),
-        }),
-        execute: async ({ flightNumber, date }) => {
-          const flightStatus = await generateSampleFlightStatus({
-            flightNumber,
-            date,
-          });
-
-          return flightStatus;
-        },
-      },
-      searchFlights: {
-        description: "Search for flights based on the given parameters",
-        parameters: z.object({
-          origin: z.string().describe("Origin airport or city"),
-          destination: z.string().describe("Destination airport or city"),
-        }),
-        execute: async ({ origin, destination }) => {
-          const results = await generateSampleFlightSearchResults({
-            origin,
-            destination,
-          });
-
-          return results;
-        },
-      },
-      selectSeats: {
-        description: "Select seats for a flight",
-        parameters: z.object({
-          flightNumber: z.string().describe("Flight number"),
-        }),
-        execute: async ({ flightNumber }) => {
-          const seats = await generateSampleSeatSelection({ flightNumber });
-          return seats;
-        },
-      },
-      createReservation: {
-        description: "Display pending reservation details",
-        parameters: z.object({
-          seats: z.string().array().describe("Array of selected seat numbers"),
-          flightNumber: z.string().describe("Flight number"),
-          departure: z.object({
-            cityName: z.string().describe("Name of the departure city"),
-            airportCode: z.string().describe("Code of the departure airport"),
-            timestamp: z.string().describe("ISO 8601 date of departure"),
-            gate: z.string().describe("Departure gate"),
-            terminal: z.string().describe("Departure terminal"),
-          }),
-          arrival: z.object({
-            cityName: z.string().describe("Name of the arrival city"),
-            airportCode: z.string().describe("Code of the arrival airport"),
-            timestamp: z.string().describe("ISO 8601 date of arrival"),
-            gate: z.string().describe("Arrival gate"),
-            terminal: z.string().describe("Arrival terminal"),
-          }),
-          passengerName: z.string().describe("Name of the passenger"),
-        }),
-        execute: async (props) => {
-          const { totalPriceInUSD } = await generateReservationPrice(props);
-          const session = await auth();
-
-          const id = generateUUID();
-
-          if (session && session.user && session.user.id) {
-            await createReservation({
-              id,
-              userId: session.user.id,
-              details: { ...props, totalPriceInUSD },
+        execute: async ({ section, query }) => {
+          try {
+            const searchResults = await searchFernandoBelottoSite({
+              section: section || "home",
+              query,
             });
-
-            return { id, ...props, totalPriceInUSD };
-          } else {
+            return searchResults;
+          } catch (error) {
+            console.error("Error in searchSite tool:", error);
             return {
-              error: "User is not signed in to perform this action!",
+              section,
+              query,
+              results: [],
+              timestamp: new Date().toISOString(),
+              message: "Ocorreu um erro ao buscar informações.",
             };
           }
-        },
-      },
-      authorizePayment: {
-        description:
-          "User will enter credentials to authorize payment, wait for user to repond when they are done",
-        parameters: z.object({
-          reservationId: z
-            .string()
-            .describe("Unique identifier for the reservation"),
-        }),
-        execute: async ({ reservationId }) => {
-          return { reservationId };
-        },
-      },
-      verifyPayment: {
-        description: "Verify payment status",
-        parameters: z.object({
-          reservationId: z
-            .string()
-            .describe("Unique identifier for the reservation"),
-        }),
-        execute: async ({ reservationId }) => {
-          const reservation = await getReservationById({ id: reservationId });
-
-          if (reservation.hasCompletedPayment) {
-            return { hasCompletedPayment: true };
-          } else {
-            return { hasCompletedPayment: false };
-          }
-        },
-      },
-      displayBoardingPass: {
-        description: "Display a boarding pass",
-        parameters: z.object({
-          reservationId: z
-            .string()
-            .describe("Unique identifier for the reservation"),
-          passengerName: z
-            .string()
-            .describe("Name of the passenger, in title case"),
-          flightNumber: z.string().describe("Flight number"),
-          seat: z.string().describe("Seat number"),
-          departure: z.object({
-            cityName: z.string().describe("Name of the departure city"),
-            airportCode: z.string().describe("Code of the departure airport"),
-            airportName: z.string().describe("Name of the departure airport"),
-            timestamp: z.string().describe("ISO 8601 date of departure"),
-            terminal: z.string().describe("Departure terminal"),
-            gate: z.string().describe("Departure gate"),
-          }),
-          arrival: z.object({
-            cityName: z.string().describe("Name of the arrival city"),
-            airportCode: z.string().describe("Code of the arrival airport"),
-            airportName: z.string().describe("Name of the arrival airport"),
-            timestamp: z.string().describe("ISO 8601 date of arrival"),
-            terminal: z.string().describe("Arrival terminal"),
-            gate: z.string().describe("Arrival gate"),
-          }),
-        }),
-        execute: async (boardingPass) => {
-          return boardingPass;
         },
       },
     },
     onFinish: async ({ responseMessages }) => {
       if (session.user && session.user.id) {
         try {
+          const allMessages = [...coreMessages, ...responseMessages];
           await saveChat({
             id,
-            messages: [...coreMessages, ...responseMessages],
+            messages: allMessages,
             userId: session.user.id,
           });
         } catch (error) {
@@ -233,7 +110,12 @@ export async function POST(request: Request) {
     },
   });
 
-  return result.toDataStreamResponse({});
+  return new Response(result.toAIStream(), {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Transfer-Encoding": "chunked",
+    },
+  });
 }
 
 export async function DELETE(request: Request) {
